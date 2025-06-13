@@ -329,11 +329,20 @@ export class JQuantsAPI {
   }
 
   /**
-   * 銘柄検索
+   * 銘柄情報を事前取得・キャッシュ
    */
-  async searchStocks(query: string): Promise<SearchResult[]> {
+  private allStocksCache: SearchResult[] | null = null;
+  private allStocksCacheExpiry: Date | null = null;
+
+  private async getAllStocks(): Promise<SearchResult[]> {
+    // キャッシュが有効な場合は返す（24時間キャッシュ）
+    if (this.allStocksCache && this.allStocksCacheExpiry && new Date() < this.allStocksCacheExpiry) {
+      console.log('Using cached all stocks data');
+      return this.allStocksCache;
+    }
+
     try {
-      console.log(`Searching stocks with query: ${query}`);
+      console.log('Fetching all stocks from J-Quants API');
       const token = await this.authenticate();
       
       const response = await fetch(`${this.config.baseUrl}/listed/info`, {
@@ -344,28 +353,20 @@ export class JQuantsAPI {
       });
 
       if (!response.ok) {
-        console.warn(`Failed to fetch listed info: ${response.status}`);
-        return this.getMockSearchResults(query);
+        const errorText = await response.text();
+        console.error(`Failed to fetch listed info: ${response.status} - ${errorText}`);
+        throw new Error(`API call failed: ${response.status}`);
       }
 
       const data: JQuantsListedInfoResponse = await response.json();
       
       if (!data.info || data.info.length === 0) {
-        return this.getMockSearchResults(query);
+        console.warn('No stock info received from API');
+        throw new Error('No stock data received');
       }
 
-      // クエリでフィルタリング
-      const filtered = data.info.filter(stock => {
-        const searchQuery = query.toLowerCase();
-        return (
-          stock.Code.includes(searchQuery) ||
-          stock.CompanyName.toLowerCase().includes(searchQuery) ||
-          (stock.CompanyNameEnglish && stock.CompanyNameEnglish.toLowerCase().includes(searchQuery))
-        );
-      });
-
-      // 結果を最大20件に制限
-      const results = filtered.slice(0, 20).map(stock => ({
+      // データを変換してキャッシュ
+      this.allStocksCache = data.info.map(stock => ({
         code: stock.Code,
         name: stock.CompanyName,
         nameEnglish: stock.CompanyNameEnglish || undefined,
@@ -373,12 +374,47 @@ export class JQuantsAPI {
         market: stock.MarketCodeName || '不明',
         scaleCategory: stock.ScaleCategory || '不明'
       }));
+      
+      // キャッシュ期限を24時間後に設定
+      this.allStocksCacheExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      
+      console.log(`Successfully cached ${this.allStocksCache.length} stocks`);
+      return this.allStocksCache;
 
+    } catch (error) {
+      console.error('Failed to fetch all stocks:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 銘柄検索
+   */
+  async searchStocks(query: string): Promise<SearchResult[]> {
+    try {
+      console.log(`Searching stocks with query: ${query}`);
+      
+      // 全銘柄データを取得（キャッシュ利用）
+      const allStocks = await this.getAllStocks();
+      
+      // クエリでフィルタリング
+      const searchQuery = query.toLowerCase();
+      const filtered = allStocks.filter(stock => {
+        return (
+          stock.code.includes(searchQuery.toUpperCase()) ||
+          stock.name.toLowerCase().includes(searchQuery) ||
+          (stock.nameEnglish && stock.nameEnglish.toLowerCase().includes(searchQuery))
+        );
+      });
+
+      // 結果を最大20件に制限
+      const results = filtered.slice(0, 20);
       console.log(`Found ${results.length} stocks for query: ${query}`);
       return results;
 
     } catch (error) {
       console.error(`Failed to search stocks for query ${query}:`, error);
+      console.log(`Falling back to mock search results for query: ${query}`);
       return this.getMockSearchResults(query);
     }
   }
