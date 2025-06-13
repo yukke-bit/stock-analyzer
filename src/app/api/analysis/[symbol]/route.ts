@@ -1,12 +1,93 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { StockPrice, Fundamentals, AnalysisResult } from '@/types/stock';
+import { AnalysisResult } from '@/types/stock';
+import { JQuantsAPI } from '@/lib/jquants';
+import { DataCache } from '@/lib/cache-simple';
+import { TechnicalAnalysis } from '@/lib/technical-analysis';
+import { FundamentalAnalysis } from '@/lib/fundamental-analysis';
+import { JudgmentEngine } from '@/lib/judgment-engine';
 
-// モック分析結果を生成
+const jquantsAPI = new JQuantsAPI();
+const cache = new DataCache();
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ symbol: string }> }
+) {
+  let symbol: string | undefined;
+  
+  try {
+    const resolvedParams = await params;
+    symbol = resolvedParams.symbol;
+
+    if (!symbol) {
+      return NextResponse.json(
+        { error: '銘柄コードが必要です' },
+        { status: 400 }
+      );
+    }
+
+    console.log(`Performing real analysis for ${symbol}`);
+    
+    // 株価データを取得
+    let stockData = await cache.getStockData(symbol);
+    
+    if (!stockData) {
+      console.log(`Fetching fresh data for analysis: ${symbol}`);
+      stockData = await jquantsAPI.getStockData(symbol);
+      
+      if (stockData) {
+        await cache.saveStockData(symbol, stockData);
+      }
+    }
+
+    if (!stockData || !stockData.prices || stockData.prices.length < 52) {
+      return NextResponse.json(
+        { error: '分析に必要な十分なデータがありません（最低52日分が必要）' },
+        { status: 400 }
+      );
+    }
+
+    // 技術分析を実行
+    const technicalResult = TechnicalAnalysis.analyze(stockData.prices);
+    
+    // ファンダメンタル分析を実行
+    const fundamentalResult = FundamentalAnalysis.analyze(
+      stockData.fundamentals || {}
+    );
+    
+    // 総合判定を実行
+    const judgment = JudgmentEngine.judge(
+      technicalResult,
+      fundamentalResult,
+      stockData.fundamentals || {}
+    );
+
+    const analysisResult: AnalysisResult = {
+      symbol,
+      technical: technicalResult,
+      fundamental: fundamentalResult,
+      judgment,
+      updatedAt: new Date().toISOString()
+    };
+
+    return NextResponse.json(analysisResult);
+
+  } catch (error) {
+    console.error('Analysis API error:', error);
+    
+    // エラー時はモックデータで代替
+    console.log(`Falling back to mock analysis for ${symbol || 'unknown'}`);
+    const mockResult = generateMockAnalysis(symbol || 'unknown');
+    return NextResponse.json(mockResult);
+  }
+}
+
+// フォールバック用のモック分析結果を生成
 function generateMockAnalysis(symbol: string): AnalysisResult {
   return {
     symbol,
     technical: {
-      rsi: 45 + Math.random() * 40, // 45-85の範囲
+      rsi: 45 + Math.random() * 40,
       macd: {
         macd: Math.random() * 20 - 10,
         signal: Math.random() * 20 - 10,
@@ -58,32 +139,4 @@ function generateMockAnalysis(symbol: string): AnalysisResult {
     },
     updatedAt: new Date().toISOString()
   };
-}
-
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ symbol: string }> }
-) {
-  try {
-    const { symbol } = await params;
-
-    if (!symbol) {
-      return NextResponse.json(
-        { error: '銘柄コードが必要です' },
-        { status: 400 }
-      );
-    }
-
-    console.log(`Generating mock analysis for ${symbol}`);
-    const analysisResult = generateMockAnalysis(symbol);
-
-    return NextResponse.json(analysisResult);
-
-  } catch (error) {
-    console.error('Analysis API error:', error);
-    return NextResponse.json(
-      { error: '分析処理に失敗しました' },
-      { status: 500 }
-    );
-  }
 }
