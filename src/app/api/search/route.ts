@@ -1,23 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { JQuantsAPI } from '@/lib/jquants';
 import { DataCache } from '@/lib/cache-simple';
+import { searchPopularStocks, POPULAR_STOCKS } from '@/lib/popular-stocks';
 
 const jquantsAPI = new JQuantsAPI();
 const cache = new DataCache();
-
-// 人気銘柄のフォールバック
-const POPULAR_STOCKS = [
-  { code: '7203', name: 'トヨタ自動車', sector: '輸送用機器', market: 'プライム', scaleCategory: '大型' },
-  { code: '9984', name: 'ソフトバンクグループ', sector: '情報・通信業', market: 'プライム', scaleCategory: '大型' },
-  { code: '7974', name: '任天堂', sector: 'その他製品', market: 'プライム', scaleCategory: '大型' },
-  { code: '6758', name: 'ソニーグループ', sector: '電気機器', market: 'プライム', scaleCategory: '大型' },
-  { code: '9434', name: 'ソフトバンク', sector: '情報・通信業', market: 'プライム', scaleCategory: '大型' },
-  { code: '4689', name: 'Zホールディングス', sector: '情報・通信業', market: 'プライム', scaleCategory: '大型' },
-  { code: '6861', name: 'キーエンス', sector: '電気機器', market: 'プライム', scaleCategory: '大型' },
-  { code: '8035', name: '東京エレクトロン', sector: '電気機器', market: 'プライム', scaleCategory: '大型' },
-  { code: '9983', name: 'ファーストリテイリング', sector: '小売業', market: 'プライム', scaleCategory: '大型' },
-  { code: '4063', name: '信越化学工業', sector: '化学', market: 'プライム', scaleCategory: '大型' },
-];
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,9 +13,10 @@ export async function GET(request: NextRequest) {
 
     if (!query) {
       // クエリがない場合は人気銘柄を返す（フロントエンドの期待形式に変換）
-      const popularFormatted = POPULAR_STOCKS.map(stock => ({
+      const popularFormatted = POPULAR_STOCKS.slice(0, 10).map(stock => ({
         symbol: stock.code,
-        name: stock.name
+        name: stock.name,
+        sector: stock.sector
       }));
       return NextResponse.json(popularFormatted);
     }
@@ -46,7 +34,7 @@ export async function GET(request: NextRequest) {
     console.log(`Searching stocks for query: ${query}`);
     
     try {
-      // J-Quants APIで検索
+      // 効率化された検索（人気銘柄優先、最小API使用）
       const searchResults = await jquantsAPI.searchStocks(query);
       
       // フロントエンドが期待する形式に変換
@@ -57,24 +45,22 @@ export async function GET(request: NextRequest) {
         market: stock.market
       }));
       
-      // 結果をキャッシュ（30分間）
-      cache.set(cacheKey, formattedResults, 30);
+      // 結果をキャッシュ（7日間 - 長期キャッシュでAPI節約）
+      cache.set(cacheKey, formattedResults, 7 * 24 * 60); // 7日
       
       return NextResponse.json(formattedResults);
     } catch (apiError) {
-      console.warn('J-Quants API search failed, using fallback:', apiError);
+      console.warn('Search failed, using popular stocks fallback:', apiError);
       
-      // フォールバック: 人気銘柄から検索
-      const filteredStocks = POPULAR_STOCKS.filter(stock => 
-        stock.code.includes(query.toUpperCase()) ||
-        stock.name.toLowerCase().includes(query.toLowerCase())
-      );
-
+      // フォールバック: 人気銘柄データベースから検索
+      const popularResults = searchPopularStocks(query, 20);
+      
       // フロントエンドの期待形式に変換
-      const formattedFallback = filteredStocks.map(stock => ({
+      const formattedFallback = popularResults.map(stock => ({
         symbol: stock.code,
         name: stock.name,
-        sector: stock.sector
+        sector: stock.sector,
+        market: stock.market
       }));
 
       return NextResponse.json(formattedFallback);
@@ -105,7 +91,8 @@ export async function POST(request: NextRequest) {
     ).map(stock => ({
       symbol: stock.code,
       name: stock.name,
-      sector: stock.sector
+      sector: stock.sector,
+      market: stock.market
     }));
 
     return NextResponse.json(results);

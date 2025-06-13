@@ -329,124 +329,149 @@ export class JQuantsAPI {
   }
 
   /**
-   * 銘柄情報を事前取得・キャッシュ
+   * 検索結果キャッシュ（クエリ別）
    */
-  private allStocksCache: SearchResult[] | null = null;
-  private allStocksCacheExpiry: Date | null = null;
+  private searchCache = new Map<string, { results: SearchResult[]; expires: Date }>();
 
-  private async getAllStocks(): Promise<SearchResult[]> {
-    // キャッシュが有効な場合は返す（24時間キャッシュ）
-    if (this.allStocksCache && this.allStocksCacheExpiry && new Date() < this.allStocksCacheExpiry) {
-      console.log('Using cached all stocks data');
-      return this.allStocksCache;
-    }
-
+  /**
+   * API効率化された銘柄検索
+   */
+  async searchStocks(query: string): Promise<SearchResult[]> {
     try {
-      console.log('Fetching all stocks from J-Quants API');
-      const token = await this.authenticate();
+      console.log(`Searching stocks with query: ${query}`);
       
-      const response = await fetch(`${this.config.baseUrl}/listed/info`, {
+      // キャッシュから検索結果を確認（7日間キャッシュ）
+      const cacheKey = query.toLowerCase().trim();
+      const cachedSearch = this.searchCache.get(cacheKey);
+      
+      if (cachedSearch && new Date() < cachedSearch.expires) {
+        console.log(`Using cached search results for: ${query}`);
+        return cachedSearch.results;
+      }
+
+      // Step 1: まず人気銘柄から検索（API不要）
+      const popularResults = this.getMockSearchResults(query);
+      
+      if (popularResults.length > 0) {
+        console.log(`Found ${popularResults.length} results in popular stocks`);
+        
+        // 人気銘柄での結果をキャッシュ
+        this.searchCache.set(cacheKey, {
+          results: popularResults,
+          expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7日
+        });
+        
+        return popularResults;
+      }
+
+      // Step 2: 人気銘柄で見つからない場合のみAPIを使用
+      console.log(`No results in popular stocks, trying J-Quants API for: ${query}`);
+      
+      try {
+        const token = await this.authenticate();
+        
+        // 特定の銘柄コードで直接検索を試行
+        if (/^[0-9]{4}$/.test(query)) {
+          const singleResult = await this.searchSingleStock(query, token);
+          if (singleResult) {
+            const results = [singleResult];
+            this.searchCache.set(cacheKey, {
+              results,
+              expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            });
+            return results;
+          }
+        }
+
+        // 部分的なAPIアクセス（必要最小限）
+        const apiResults = await this.limitedApiSearch(query, token);
+        
+        // API結果をキャッシュ
+        this.searchCache.set(cacheKey, {
+          results: apiResults,
+          expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        });
+        
+        return apiResults;
+
+      } catch (apiError) {
+        console.warn(`J-Quants API search failed for ${query}:`, apiError);
+        
+        // API失敗時は空配列を短期間キャッシュ（再試行を防ぐ）
+        this.searchCache.set(cacheKey, {
+          results: [],
+          expires: new Date(Date.now() + 60 * 60 * 1000) // 1時間
+        });
+        
+        return [];
+      }
+
+    } catch (error) {
+      console.error(`Search failed for query ${query}:`, error);
+      return this.getMockSearchResults(query);
+    }
+  }
+
+  /**
+   * 単一銘柄の詳細検索（APIコール最小化）
+   */
+  private async searchSingleStock(code: string, token: string): Promise<SearchResult | null> {
+    try {
+      const response = await fetch(`${this.config.baseUrl}/listed/info?code=${code}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Failed to fetch listed info: ${response.status} - ${errorText}`);
-        throw new Error(`API call failed: ${response.status}`);
-      }
+      if (!response.ok) return null;
 
       const data: JQuantsListedInfoResponse = await response.json();
-      
-      if (!data.info || data.info.length === 0) {
-        console.warn('No stock info received from API');
-        throw new Error('No stock data received');
-      }
+      const stock = data.info?.[0];
 
-      // データを変換してキャッシュ
-      this.allStocksCache = data.info.map(stock => ({
+      if (!stock) return null;
+
+      return {
         code: stock.Code,
         name: stock.CompanyName,
         nameEnglish: stock.CompanyNameEnglish || undefined,
         sector: stock.Sector17CodeName || '不明',
         market: stock.MarketCodeName || '不明',
         scaleCategory: stock.ScaleCategory || '不明'
-      }));
-      
-      // キャッシュ期限を24時間後に設定
-      this.allStocksCacheExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      
-      console.log(`Successfully cached ${this.allStocksCache.length} stocks`);
-      return this.allStocksCache;
+      };
 
     } catch (error) {
-      console.error('Failed to fetch all stocks:', error);
-      throw error;
+      console.error(`Single stock search failed for ${code}:`, error);
+      return null;
     }
   }
 
   /**
-   * 銘柄検索
+   * 制限された API検索（フル検索を避ける）
    */
-  async searchStocks(query: string): Promise<SearchResult[]> {
-    try {
-      console.log(`Searching stocks with query: ${query}`);
-      
-      // 全銘柄データを取得（キャッシュ利用）
-      const allStocks = await this.getAllStocks();
-      
-      // クエリでフィルタリング
-      const searchQuery = query.toLowerCase();
-      const filtered = allStocks.filter(stock => {
-        return (
-          stock.code.includes(searchQuery.toUpperCase()) ||
-          stock.name.toLowerCase().includes(searchQuery) ||
-          (stock.nameEnglish && stock.nameEnglish.toLowerCase().includes(searchQuery))
-        );
-      });
-
-      // 結果を最大20件に制限
-      const results = filtered.slice(0, 20);
-      console.log(`Found ${results.length} stocks for query: ${query}`);
-      return results;
-
-    } catch (error) {
-      console.error(`Failed to search stocks for query ${query}:`, error);
-      console.log(`Falling back to mock search results for query: ${query}`);
-      return this.getMockSearchResults(query);
-    }
+  private async limitedApiSearch(query: string, token: string): Promise<SearchResult[]> {
+    // 現在は安全のため空配列を返す（フル API アクセスを避ける）
+    // 必要に応じて特定の条件下でのみ制限的な検索を実装
+    console.log(`Limited API search not implemented for safety: ${query}`);
+    return [];
   }
 
   /**
-   * フォールバック用のモック検索結果
+   * 人気銘柄から検索（API不要）
    */
   private getMockSearchResults(query: string): SearchResult[] {
-    const mockStocks = [
-      { code: '7203', name: 'トヨタ自動車', sector: '輸送用機器', market: 'プライム' },
-      { code: '9984', name: 'ソフトバンクグループ', sector: '情報・通信業', market: 'プライム' },
-      { code: '7974', name: '任天堂', sector: 'その他製品', market: 'プライム' },
-      { code: '6758', name: 'ソニーグループ', sector: '電気機器', market: 'プライム' },
-      { code: '9434', name: 'ソフトバンク', sector: '情報・通信業', market: 'プライム' },
-      { code: '4689', name: 'Zホールディングス', sector: '情報・通信業', market: 'プライム' },
-      { code: '6861', name: 'キーエンス', sector: '電気機器', market: 'プライム' },
-      { code: '8035', name: '東京エレクトロン', sector: '電気機器', market: 'プライム' },
-      { code: '9983', name: 'ファーストリテイリング', sector: '小売業', market: 'プライム' },
-      { code: '4063', name: '信越化学工業', sector: '化学', market: 'プライム' }
-    ];
-
-    const searchQuery = query.toLowerCase();
-    return mockStocks
-      .filter(stock => 
-        stock.code.includes(searchQuery) || 
-        stock.name.toLowerCase().includes(searchQuery)
-      )
-      .map(stock => ({
-        ...stock,
-        nameEnglish: undefined,
-        scaleCategory: '大型'
-      }));
+    // 外部の人気銘柄データベースを使用
+    const { searchPopularStocks } = require('./popular-stocks');
+    const popularResults = searchPopularStocks(query, 20);
+    
+    return popularResults.map((stock: any) => ({
+      code: stock.code,
+      name: stock.name,
+      nameEnglish: undefined,
+      sector: stock.sector,
+      market: stock.market,
+      scaleCategory: '大型'
+    }));
   }
 
   /**
