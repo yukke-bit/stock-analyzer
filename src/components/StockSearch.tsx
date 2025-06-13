@@ -31,11 +31,19 @@ export default function StockSearch({ onSelectStock }: StockSearchProps) {
 
       setLoading(true);
       try {
+        console.log('Searching for:', query);
         const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        console.log('Search response status:', response.status);
+        
         if (response.ok) {
           const stocks = await response.json();
+          console.log('Search results:', stocks);
           setSuggestions(stocks);
           setIsOpen(stocks.length > 0);
+        } else {
+          console.error('Search failed with status:', response.status);
+          const errorText = await response.text();
+          console.error('Error response:', errorText);
         }
       } catch (error) {
         console.error('Search error:', error);

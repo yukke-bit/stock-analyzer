@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     try {
       // 効率化された検索（人気銘柄優先、最小API使用）
       const searchResults = await jquantsAPI.searchStocks(query);
+      console.log(`J-Quants search returned ${searchResults.length} results:`, searchResults);
       
       // フロントエンドが期待する形式に変換
       const formattedResults = searchResults.map(stock => ({
@@ -44,6 +45,8 @@ export async function GET(request: NextRequest) {
         sector: stock.sector,
         market: stock.market
       }));
+      
+      console.log(`Formatted results:`, formattedResults);
       
       // 結果をキャッシュ（7日間 - 長期キャッシュでAPI節約）
       cache.set(cacheKey, formattedResults, 7 * 24 * 60); // 7日
