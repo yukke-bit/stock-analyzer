@@ -5,26 +5,29 @@
 1. [J-Quants公式サイト](https://jpx-jquants.com/) にアクセス
 2. 「新規登録」でアカウント作成
 3. メール認証を完了
+4. 無料プランでも利用可能（1日1,000リクエスト）
 
-## 2. APIキー取得
+## 2. 認証フロー
 
-1. ログイン後、マイページへ
-2. 「API」セクションでAPIキーを生成
-3. 無料プランでは1日1,000リクエストまで利用可能
+J-Quants APIは2段階認証を使用：
+1. **リフレッシュトークン取得**: メールアドレス + パスワード
+2. **アクセストークン取得**: リフレッシュトークンを使用
 
 ## 3. 環境変数設定
 
 ### ローカル開発
-`.env.local` ファイルにAPIキーを設定：
+`.env.local` ファイルに認証情報を設定：
 ```
-JQUANTS_API_KEY=your_actual_api_key_here
+JQUANTS_EMAIL=your_email@example.com
+JQUANTS_PASSWORD=your_password
 ```
 
 ### Vercelデプロイ
 1. Vercelダッシュボードで該当プロジェクトを選択
 2. Settings → Environment Variables
-3. `JQUANTS_API_KEY` を追加
-4. 本番用APIキーを設定
+3. 以下の環境変数を追加：
+   - `JQUANTS_EMAIL`: J-Quantsアカウントのメールアドレス
+   - `JQUANTS_PASSWORD`: J-Quantsアカウントのパスワード
 
 ## 4. 利用可能な銘柄コード
 

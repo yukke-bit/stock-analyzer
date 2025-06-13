@@ -1,11 +1,16 @@
 import { StockInfo, StockPrice, Fundamentals } from '@/types/stock';
 
 interface JQuantsConfig {
-  apiKey: string;
+  email: string;
+  password: string;
   baseUrl: string;
 }
 
-interface JQuantsAuthResponse {
+interface JQuantsRefreshTokenResponse {
+  refresh_token: string;
+}
+
+interface JQuantsAccessTokenResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
@@ -32,26 +37,24 @@ interface JQuantsPriceResponse {
 
 export class JQuantsAPI {
   private config: JQuantsConfig;
+  private refreshToken: string | null = null;
   private accessToken: string | null = null;
   private tokenExpiry: Date | null = null;
 
   constructor() {
     this.config = {
-      apiKey: process.env.JQUANTS_API_KEY || '',
+      email: process.env.JQUANTS_EMAIL || '',
+      password: process.env.JQUANTS_PASSWORD || '',
       baseUrl: 'https://api.jquants.com/v1'
     };
   }
 
   /**
-   * J-Quants APIの認証を行い、アクセストークンを取得
+   * リフレッシュトークンを取得
    */
-  private async authenticate(): Promise<string> {
-    if (this.accessToken && this.tokenExpiry && new Date() < this.tokenExpiry) {
-      return this.accessToken;
-    }
-
-    if (!this.config.apiKey) {
-      throw new Error('J-Quants API key is not configured');
+  private async getRefreshToken(): Promise<string> {
+    if (!this.config.email || !this.config.password) {
+      throw new Error('J-Quants email and password are not configured');
     }
 
     try {
@@ -61,23 +64,80 @@ export class JQuantsAPI {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          mailaddress: this.config.apiKey
+          mailaddress: this.config.email,
+          password: this.config.password
         })
       });
 
       if (!response.ok) {
-        throw new Error(`Authentication failed: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`Refresh token request failed: ${response.status} - ${errorText}`);
       }
 
-      const data: JQuantsAuthResponse = await response.json();
+      const data: JQuantsRefreshTokenResponse = await response.json();
+      this.refreshToken = data.refresh_token;
+      
+      console.log('J-Quants refresh token obtained successfully');
+      return this.refreshToken;
+    } catch (error) {
+      console.error('J-Quants refresh token error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * アクセストークンを取得
+   */
+  private async getAccessToken(): Promise<string> {
+    if (this.accessToken && this.tokenExpiry && new Date() < this.tokenExpiry) {
+      return this.accessToken;
+    }
+
+    // リフレッシュトークンがない場合は取得
+    if (!this.refreshToken) {
+      await this.getRefreshToken();
+    }
+
+    try {
+      const response = await fetch(`${this.config.baseUrl}/token/auth_refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: this.refreshToken
+        })
+      });
+
+      if (!response.ok) {
+        // リフレッシュトークンが無効な場合は再取得
+        if (response.status === 401) {
+          console.log('Refresh token expired, getting new refresh token');
+          await this.getRefreshToken();
+          return this.getAccessToken(); // 再帰呼び出し
+        }
+        
+        const errorText = await response.text();
+        throw new Error(`Access token request failed: ${response.status} - ${errorText}`);
+      }
+
+      const data: JQuantsAccessTokenResponse = await response.json();
       this.accessToken = data.access_token;
       this.tokenExpiry = new Date(Date.now() + (data.expires_in - 60) * 1000); // 60秒の余裕を持たせる
 
+      console.log('J-Quants access token obtained successfully');
       return this.accessToken;
     } catch (error) {
-      console.error('J-Quants authentication error:', error);
+      console.error('J-Quants access token error:', error);
       throw error;
     }
+  }
+
+  /**
+   * 認証を行い、アクセストークンを取得（公開メソッド）
+   */
+  private async authenticate(): Promise<string> {
+    return this.getAccessToken();
   }
 
   /**
