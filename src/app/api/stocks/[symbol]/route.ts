@@ -19,23 +19,16 @@ export async function GET(
       );
     }
 
-    // キャッシュから取得を試行
-    let stockData = await cache.getStockData(symbol);
+    // Vercel環境ではキャッシュをスキップしてモックデータを直接使用
+    console.log(`Fetching mock data for ${symbol}`);
+    const stockData = await scraper.getStockData(symbol);
     
     if (!stockData) {
-      // キャッシュにない場合はスクレイピング
-      console.log(`Fetching fresh data for ${symbol}`);
-      stockData = await scraper.getStockData(symbol);
-      
-      if (!stockData) {
-        return NextResponse.json(
-          { error: '株価データの取得に失敗しました' },
-          { status: 404 }
-        );
-      }
-
-      // キャッシュに保存
-      await cache.saveStockData(symbol, stockData);
+      console.error(`No stock data returned for ${symbol}`);
+      return NextResponse.json(
+        { error: '株価データの取得に失敗しました' },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json(stockData);
