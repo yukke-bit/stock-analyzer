@@ -23,11 +23,16 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // 認証テスト
+    // リフレッシュトークン取得テスト
     try {
-      console.log('Testing authentication...');
-      const token = await (jquantsAPI as any).authenticate();
-      console.log('Authentication successful, token length:', token?.length || 0);
+      console.log('Testing refresh token acquisition...');
+      const refreshToken = await (jquantsAPI as any).getRefreshToken();
+      console.log('Refresh token successful, length:', refreshToken?.length || 0);
+      
+      // アクセストークン取得テスト
+      console.log('Testing access token acquisition...');
+      const accessToken = await (jquantsAPI as any).getAccessToken();
+      console.log('Access token successful, length:', accessToken?.length || 0);
       
       // 少数の銘柄検索テスト
       console.log('Testing stock search...');
@@ -38,7 +43,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         auth: {
-          tokenLength: token?.length || 0
+          refreshTokenLength: refreshToken?.length || 0,
+          accessTokenLength: accessToken?.length || 0
         },
         search: {
           query: 'トヨタ',

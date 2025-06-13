@@ -130,7 +130,7 @@ export class JQuantsAPI {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          refresh_token: this.refreshToken
+          refreshtoken: this.refreshToken
         })
       });
 
