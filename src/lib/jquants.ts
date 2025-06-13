@@ -253,7 +253,7 @@ export class JQuantsAPI {
       }
 
       return {
-        code: stockInfo.Code,
+        code: stockInfo.Code.replace(/0+$/, ''), // 末尾の0を除去
         name: stockInfo.CompanyName,
         sector: stockInfo.Sector17Code || '不明'
       };
@@ -331,7 +331,7 @@ export class JQuantsAPI {
       ]);
 
       return {
-        symbol: stockInfo.code,
+        symbol: stockInfo.code.replace(/0+$/, ''), // 末尾の0を除去
         name: stockInfo.name,
         prices,
         fundamentals
@@ -449,7 +449,7 @@ export class JQuantsAPI {
       if (!stock) return null;
 
       return {
-        code: stock.Code,
+        code: stock.Code.replace(/0+$/, ''), // 末尾の0を除去
         name: stock.CompanyName,
         nameEnglish: stock.CompanyNameEnglish || undefined,
         sector: stock.Sector17CodeName || '不明',
