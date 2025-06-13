@@ -35,6 +35,31 @@ interface JQuantsPriceResponse {
   }[];
 }
 
+interface JQuantsListedInfoResponse {
+  info: {
+    Date: string;
+    Code: string;
+    CompanyName: string;
+    CompanyNameEnglish: string;
+    Sector17Code: string;
+    Sector17CodeName: string;
+    Sector33Code: string;
+    Sector33CodeName: string;
+    ScaleCategory: string;
+    MarketCode: string;
+    MarketCodeName: string;
+  }[];
+}
+
+export interface SearchResult {
+  code: string;
+  name: string;
+  nameEnglish?: string;
+  sector: string;
+  market: string;
+  scaleCategory: string;
+}
+
 export class JQuantsAPI {
   private config: JQuantsConfig;
   private refreshToken: string | null = null;
@@ -301,6 +326,91 @@ export class JQuantsAPI {
       console.log(`Falling back to mock data for ${symbol}`);
       return this.getMockStockData(symbol);
     }
+  }
+
+  /**
+   * 銘柄検索
+   */
+  async searchStocks(query: string): Promise<SearchResult[]> {
+    try {
+      console.log(`Searching stocks with query: ${query}`);
+      const token = await this.authenticate();
+      
+      const response = await fetch(`${this.config.baseUrl}/listed/info`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        console.warn(`Failed to fetch listed info: ${response.status}`);
+        return this.getMockSearchResults(query);
+      }
+
+      const data: JQuantsListedInfoResponse = await response.json();
+      
+      if (!data.info || data.info.length === 0) {
+        return this.getMockSearchResults(query);
+      }
+
+      // クエリでフィルタリング
+      const filtered = data.info.filter(stock => {
+        const searchQuery = query.toLowerCase();
+        return (
+          stock.Code.includes(searchQuery) ||
+          stock.CompanyName.toLowerCase().includes(searchQuery) ||
+          (stock.CompanyNameEnglish && stock.CompanyNameEnglish.toLowerCase().includes(searchQuery))
+        );
+      });
+
+      // 結果を最大20件に制限
+      const results = filtered.slice(0, 20).map(stock => ({
+        code: stock.Code,
+        name: stock.CompanyName,
+        nameEnglish: stock.CompanyNameEnglish || undefined,
+        sector: stock.Sector17CodeName || '不明',
+        market: stock.MarketCodeName || '不明',
+        scaleCategory: stock.ScaleCategory || '不明'
+      }));
+
+      console.log(`Found ${results.length} stocks for query: ${query}`);
+      return results;
+
+    } catch (error) {
+      console.error(`Failed to search stocks for query ${query}:`, error);
+      return this.getMockSearchResults(query);
+    }
+  }
+
+  /**
+   * フォールバック用のモック検索結果
+   */
+  private getMockSearchResults(query: string): SearchResult[] {
+    const mockStocks = [
+      { code: '7203', name: 'トヨタ自動車', sector: '輸送用機器', market: 'プライム' },
+      { code: '9984', name: 'ソフトバンクグループ', sector: '情報・通信業', market: 'プライム' },
+      { code: '7974', name: '任天堂', sector: 'その他製品', market: 'プライム' },
+      { code: '6758', name: 'ソニーグループ', sector: '電気機器', market: 'プライム' },
+      { code: '9434', name: 'ソフトバンク', sector: '情報・通信業', market: 'プライム' },
+      { code: '4689', name: 'Zホールディングス', sector: '情報・通信業', market: 'プライム' },
+      { code: '6861', name: 'キーエンス', sector: '電気機器', market: 'プライム' },
+      { code: '8035', name: '東京エレクトロン', sector: '電気機器', market: 'プライム' },
+      { code: '9983', name: 'ファーストリテイリング', sector: '小売業', market: 'プライム' },
+      { code: '4063', name: '信越化学工業', sector: '化学', market: 'プライム' }
+    ];
+
+    const searchQuery = query.toLowerCase();
+    return mockStocks
+      .filter(stock => 
+        stock.code.includes(searchQuery) || 
+        stock.name.toLowerCase().includes(searchQuery)
+      )
+      .map(stock => ({
+        ...stock,
+        nameEnglish: undefined,
+        scaleCategory: '大型'
+      }));
   }
 
   /**

@@ -108,6 +108,15 @@ export class DataCache {
     return cache.get<AnalysisResult>(`analysis:${symbol}`);
   }
 
+  // 汎用的なget/setメソッドを公開
+  get<T>(key: string): T | null {
+    return cache.get<T>(key);
+  }
+
+  set<T>(key: string, data: T, ttlMinutes: number = 60): void {
+    cache.set(key, data, ttlMinutes);
+  }
+
   async listCachedStocks(): Promise<string[]> {
     const stats = cache.getStats();
     return stats.keys
