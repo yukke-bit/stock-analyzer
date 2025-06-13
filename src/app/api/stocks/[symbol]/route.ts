@@ -1,44 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { StockInfo, StockPrice } from '@/types/stock';
+import { JQuantsAPI } from '@/lib/jquants';
+import { DataCache } from '@/lib/cache-simple';
 
-function generateMockData(symbol: string): StockInfo {
-  const prices: StockPrice[] = [];
-  const basePrice = 1000 + Math.random() * 2000;
-  
-  for (let i = 29; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    
-    const variation = (Math.random() - 0.5) * 0.1;
-    const close = basePrice * (1 + variation * i * 0.01);
-    const open = close * (1 + (Math.random() - 0.5) * 0.02);
-    const high = Math.max(open, close) * (1 + Math.random() * 0.01);
-    const low = Math.min(open, close) * (1 - Math.random() * 0.01);
-    
-    prices.push({
-      date: date.toISOString().split('T')[0],
-      open: Math.round(open),
-      high: Math.round(high),
-      low: Math.round(low),
-      close: Math.round(close),
-      volume: Math.floor(Math.random() * 1000000)
-    });
-  }
-
-  return {
-    symbol,
-    name: `${symbol} 株式会社`,
-    prices,
-    fundamentals: {
-      per: 15.5,
-      pbr: 1.2,
-      roe: 8.5,
-      dividendYield: 2.1,
-      marketCap: 1000000000,
-      revenue: 500000000
-    }
-  };
-}
+const jquantsAPI = new JQuantsAPI();
+const cache = new DataCache();
 
 export async function GET(
   request: NextRequest,
@@ -54,8 +19,27 @@ export async function GET(
       );
     }
 
-    console.log(`Generating mock data for ${symbol}`);
-    const stockData = generateMockData(symbol);
+    // キャッシュから取得を試行
+    let stockData = await cache.getStockData(symbol);
+    
+    if (!stockData) {
+      console.log(`Fetching fresh data for ${symbol} from J-Quants API`);
+      stockData = await jquantsAPI.getStockData(symbol);
+      
+      if (stockData) {
+        // キャッシュに保存
+        await cache.saveStockData(symbol, stockData);
+      }
+    } else {
+      console.log(`Using cached data for ${symbol}`);
+    }
+
+    if (!stockData) {
+      return NextResponse.json(
+        { error: '株価データの取得に失敗しました' },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json(stockData);
 
