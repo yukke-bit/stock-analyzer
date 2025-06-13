@@ -6,60 +6,9 @@ export class YahooFinanceScraper {
   private readonly baseUrl = 'https://finance.yahoo.com';
   
   async getStockData(symbol: string): Promise<StockInfo | null> {
-    try {
-      // 日本株の場合は.Tを付ける
-      const yahooSymbol = symbol.includes('.') ? symbol : `${symbol}.T`;
-      const url = `${this.baseUrl}/quote/${yahooSymbol}/history`;
-      
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      });
-
-      const $ = cheerio.load(response.data);
-      const prices: StockPrice[] = [];
-
-      // テーブルからデータを抽出
-      $('table tbody tr').each((index, element) => {
-        if (index >= 30) return; // 最新30日分のみ
-        
-        const cells = $(element).find('td');
-        if (cells.length >= 6) {
-          const dateStr = $(cells[0]).text().trim();
-          const open = parseFloat($(cells[1]).text().replace(/,/g, ''));
-          const high = parseFloat($(cells[2]).text().replace(/,/g, ''));
-          const low = parseFloat($(cells[3]).text().replace(/,/g, ''));
-          const close = parseFloat($(cells[4]).text().replace(/,/g, ''));
-          const volume = parseInt($(cells[6]).text().replace(/,/g, ''));
-
-          if (!isNaN(open) && !isNaN(high) && !isNaN(low) && !isNaN(close)) {
-            prices.push({
-              date: this.convertDate(dateStr),
-              open,
-              high,
-              low,
-              close,
-              volume: isNaN(volume) ? 0 : volume
-            });
-          }
-        }
-      });
-
-      // 株式名を取得
-      const stockName = $('h1[data-field="symbol"]').text() || symbol;
-
-      return {
-        symbol,
-        name: stockName,
-        prices: prices.reverse(), // 古い順にソート
-        fundamentals: await this.getFundamentals(yahooSymbol)
-      };
-
-    } catch (error) {
-      console.error(`Failed to scrape data for ${symbol}:`, error);
-      return this.getMockData(symbol); // エラー時はモックデータを返す
-    }
+    // Vercelデプロイ環境ではスクレイピングが困難なため、モックデータを使用
+    console.log(`Using mock data for ${symbol} (scraping not available in production)`);
+    return this.getMockData(symbol);
   }
 
   private async getFundamentals(yahooSymbol: string) {
