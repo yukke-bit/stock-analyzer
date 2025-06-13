@@ -25,12 +25,12 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q');
 
     if (!query) {
-      // クエリがない場合は人気銘柄を返す
-      return NextResponse.json({
-        results: POPULAR_STOCKS,
-        total: POPULAR_STOCKS.length,
-        isPopular: true
-      });
+      // クエリがない場合は人気銘柄を返す（フロントエンドの期待形式に変換）
+      const popularFormatted = POPULAR_STOCKS.map(stock => ({
+        symbol: stock.code,
+        name: stock.name
+      }));
+      return NextResponse.json(popularFormatted);
     }
 
     // キャッシュキーを生成
@@ -40,12 +40,7 @@ export async function GET(request: NextRequest) {
     const cachedResults = cache.get<any[]>(cacheKey);
     if (cachedResults && Array.isArray(cachedResults)) {
       console.log(`Using cached search results for query: ${query}`);
-      return NextResponse.json({
-        results: cachedResults,
-        total: cachedResults.length,
-        query,
-        cached: true
-      });
+      return NextResponse.json(cachedResults);
     }
 
     console.log(`Searching stocks for query: ${query}`);
@@ -54,14 +49,18 @@ export async function GET(request: NextRequest) {
       // J-Quants APIで検索
       const searchResults = await jquantsAPI.searchStocks(query);
       
-      // 結果をキャッシュ（30分間）
-      cache.set(cacheKey, searchResults, 30);
+      // フロントエンドが期待する形式に変換
+      const formattedResults = searchResults.map(stock => ({
+        symbol: stock.code,
+        name: stock.name,
+        sector: stock.sector,
+        market: stock.market
+      }));
       
-      return NextResponse.json({
-        results: searchResults,
-        total: searchResults.length,
-        query
-      });
+      // 結果をキャッシュ（30分間）
+      cache.set(cacheKey, formattedResults, 30);
+      
+      return NextResponse.json(formattedResults);
     } catch (apiError) {
       console.warn('J-Quants API search failed, using fallback:', apiError);
       
@@ -71,12 +70,14 @@ export async function GET(request: NextRequest) {
         stock.name.toLowerCase().includes(query.toLowerCase())
       );
 
-      return NextResponse.json({
-        results: filteredStocks,
-        total: filteredStocks.length,
-        query,
-        fallback: true
-      });
+      // フロントエンドの期待形式に変換
+      const formattedFallback = filteredStocks.map(stock => ({
+        symbol: stock.code,
+        name: stock.name,
+        sector: stock.sector
+      }));
+
+      return NextResponse.json(formattedFallback);
     }
 
   } catch (error) {
@@ -101,7 +102,11 @@ export async function POST(request: NextRequest) {
 
     const results = POPULAR_STOCKS.filter(stock => 
       symbols.includes(stock.code)
-    );
+    ).map(stock => ({
+      symbol: stock.code,
+      name: stock.name,
+      sector: stock.sector
+    }));
 
     return NextResponse.json(results);
 

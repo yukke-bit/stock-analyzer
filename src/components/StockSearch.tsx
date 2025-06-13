@@ -5,6 +5,8 @@ import { useState, useEffect, useRef } from 'react';
 interface Stock {
   symbol: string;
   name: string;
+  sector?: string;
+  market?: string;
 }
 
 interface StockSearchProps {
@@ -138,11 +140,18 @@ export default function StockSearch({ onSelectStock }: StockSearchProps) {
                   onKeyDown={(e) => handleSuggestionKeyDown(e, index, stock.symbol)}
                 >
                   <div className="flex justify-between items-center">
-                    <div>
+                    <div className="flex-1">
                       <div className="font-medium text-gray-900">{stock.name}</div>
-                      <div className="text-sm text-gray-500">{stock.symbol}</div>
+                      <div className="text-sm text-gray-500">
+                        {stock.symbol}
+                        {stock.sector && (
+                          <span className="ml-2 px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
+                            {stock.sector}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-blue-600">
+                    <div className="text-blue-600 ml-2">
                       →
                     </div>
                   </div>
