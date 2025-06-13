@@ -199,51 +199,51 @@ export class TechnicalAnalysis {
    * 総合的な技術分析を実行
    */
   static analyze(stockPrices: StockPrice[]): TechnicalAnalysisResult {
-    if (stockPrices.length < 52) {
-      throw new Error('分析には最低52日分のデータが必要です');
+    if (stockPrices.length < 5) {
+      throw new Error('分析には最低5日分のデータが必要です');
     }
 
     const closes = stockPrices.map(p => p.close);
     const highs = stockPrices.map(p => p.high);
     const lows = stockPrices.map(p => p.low);
 
-    // 各指標を計算
-    const sma5 = this.calculateSMA(closes, 5);
-    const sma25 = this.calculateSMA(closes, 25);
-    const sma75 = this.calculateSMA(closes, 75);
-    const rsi = this.calculateRSI(closes);
-    const macd = this.calculateMACD(closes);
-    const bollinger = this.calculateBollingerBands(closes);
-    const stochastic = this.calculateStochastic(highs, lows, closes);
-    const ichimoku = this.calculateIchimoku(highs, lows, closes);
+    // 各指標を計算（データ不足の場合は利用可能な期間で計算）
+    const sma5 = closes.length >= 5 ? this.calculateSMA(closes, 5) : [];
+    const sma25 = closes.length >= 25 ? this.calculateSMA(closes, 25) : [];
+    const sma75 = closes.length >= 75 ? this.calculateSMA(closes, 75) : [];
+    const rsi = closes.length >= 15 ? this.calculateRSI(closes) : [];
+    const macd = closes.length >= 26 ? this.calculateMACD(closes) : { macd: [], signal: [], histogram: [] };
+    const bollinger = closes.length >= 20 ? this.calculateBollingerBands(closes) : { upper: [], middle: [], lower: [] };
+    const stochastic = closes.length >= 14 ? this.calculateStochastic(highs, lows, closes) : { k: [], d: [] };
+    const ichimoku = closes.length >= 52 ? this.calculateIchimoku(highs, lows, closes) : { tenkanSen: [], kijunSen: [], senkouSpanA: [], senkouSpanB: [] };
 
     // 最新の値を取得
     const currentPrice = closes[closes.length - 1];
-    const latestRsi = rsi[rsi.length - 1] || 50;
+    const latestRsi = rsi.length > 0 ? rsi[rsi.length - 1] : 50;
     const latestMacd = {
-      macd: macd.macd[macd.macd.length - 1] || 0,
-      signal: macd.signal[macd.signal.length - 1] || 0,
-      histogram: macd.histogram[macd.histogram.length - 1] || 0
+      macd: macd.macd.length > 0 ? macd.macd[macd.macd.length - 1] : 0,
+      signal: macd.signal.length > 0 ? macd.signal[macd.signal.length - 1] : 0,
+      histogram: macd.histogram.length > 0 ? macd.histogram[macd.histogram.length - 1] : 0
     };
     const latestBollinger = {
-      upper: bollinger.upper[bollinger.upper.length - 1] || currentPrice * 1.02,
-      middle: bollinger.middle[bollinger.middle.length - 1] || currentPrice,
-      lower: bollinger.lower[bollinger.lower.length - 1] || currentPrice * 0.98
+      upper: bollinger.upper.length > 0 ? bollinger.upper[bollinger.upper.length - 1] : currentPrice * 1.02,
+      middle: bollinger.middle.length > 0 ? bollinger.middle[bollinger.middle.length - 1] : currentPrice,
+      lower: bollinger.lower.length > 0 ? bollinger.lower[bollinger.lower.length - 1] : currentPrice * 0.98
     };
     const latestSma = {
-      ma5: sma5[sma5.length - 1] || currentPrice,
-      ma25: sma25[sma25.length - 1] || currentPrice,
-      ma75: sma75[sma75.length - 1] || currentPrice
+      ma5: sma5.length > 0 ? sma5[sma5.length - 1] : currentPrice,
+      ma25: sma25.length > 0 ? sma25[sma25.length - 1] : currentPrice,
+      ma75: sma75.length > 0 ? sma75[sma75.length - 1] : currentPrice
     };
     const latestStochastic = {
-      k: stochastic.k[stochastic.k.length - 1] || 50,
-      d: stochastic.d[stochastic.d.length - 1] || 50
+      k: stochastic.k.length > 0 ? stochastic.k[stochastic.k.length - 1] : 50,
+      d: stochastic.d.length > 0 ? stochastic.d[stochastic.d.length - 1] : 50
     };
     const latestIchimoku = {
-      tenkanSen: ichimoku.tenkanSen[ichimoku.tenkanSen.length - 1] || currentPrice,
-      kijunSen: ichimoku.kijunSen[ichimoku.kijunSen.length - 1] || currentPrice,
-      senkouSpanA: ichimoku.senkouSpanA[ichimoku.senkouSpanA.length - 1] || currentPrice,
-      senkouSpanB: ichimoku.senkouSpanB[ichimoku.senkouSpanB.length - 1] || currentPrice
+      tenkanSen: ichimoku.tenkanSen.length > 0 ? ichimoku.tenkanSen[ichimoku.tenkanSen.length - 1] : currentPrice,
+      kijunSen: ichimoku.kijunSen.length > 0 ? ichimoku.kijunSen[ichimoku.kijunSen.length - 1] : currentPrice,
+      senkouSpanA: ichimoku.senkouSpanA.length > 0 ? ichimoku.senkouSpanA[ichimoku.senkouSpanA.length - 1] : currentPrice,
+      senkouSpanB: ichimoku.senkouSpanB.length > 0 ? ichimoku.senkouSpanB[ichimoku.senkouSpanB.length - 1] : currentPrice
     };
 
     // スコア計算

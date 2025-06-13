@@ -40,11 +40,27 @@ export async function GET(
       }
     }
 
-    if (!stockData || !stockData.prices || stockData.prices.length < 52) {
+    if (!stockData) {
       return NextResponse.json(
-        { error: '分析に必要な十分なデータがありません（最低52日分が必要）' },
+        { error: '株価データが取得できませんでした' },
         { status: 400 }
       );
+    }
+
+    if (!stockData.prices || stockData.prices.length === 0) {
+      return NextResponse.json(
+        { error: '価格データが存在しません' },
+        { status: 400 }
+      );
+    }
+
+    if (stockData.prices.length < 52) {
+      console.log(`Insufficient data: ${stockData.prices.length} days (need 52+). Using simplified analysis.`);
+      // 52日未満でも分析を実行（簡略版）
+      // return NextResponse.json(
+      //   { error: `分析に必要なデータが不足しています（${stockData.prices.length}日分、最低52日分が必要）` },
+      //   { status: 400 }
+      // );
     }
 
     // 技術分析を実行

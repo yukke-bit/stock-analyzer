@@ -164,24 +164,33 @@ export class JQuantsAPI {
   /**
    * 株価データを取得
    */
-  async getStockPrices(symbol: string, days: number = 30): Promise<StockPrice[]> {
+  async getStockPrices(symbol: string, days: number = 120): Promise<StockPrice[]> {
     try {
       const token = await this.authenticate();
       
       // 日付範囲の計算（J-Quants契約期間を考慮）
       // 契約期間: 2023-03-21 ~ 2025-03-21
       const contractEndDate = new Date('2025-03-21');
+      const contractStartDate = new Date('2023-03-21');
       const today = new Date();
       
       // 契約期間内の最新日付を使用
-      const endDate = today <= contractEndDate ? today : contractEndDate;
+      let endDate: Date;
+      if (today <= contractEndDate) {
+        endDate = today;
+      } else {
+        // 契約期間外の場合は契約最終日を使用
+        endDate = contractEndDate;
+        console.log(`Using contract end date ${contractEndDate.toISOString().split('T')[0]} as data is outside contract period`);
+      }
+      
       const startDate = new Date(endDate);
       startDate.setDate(endDate.getDate() - days);
       
       // 契約開始日より前の場合は調整
-      const contractStartDate = new Date('2023-03-21');
       if (startDate < contractStartDate) {
         startDate.setTime(contractStartDate.getTime());
+        console.log(`Adjusted start date to contract start: ${contractStartDate.toISOString().split('T')[0]}`);
       }
 
       const fromDate = startDate.toISOString().split('T')[0];
