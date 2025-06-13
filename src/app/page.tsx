@@ -141,10 +141,10 @@ export default function Home() {
               {/* テクニカルシグナル */}
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  テクニカルシグナル (スコア: {analysis.technicalScore}/100)
+                  テクニカルシグナル (スコア: {Math.round(analysis.technical.score)}/100)
                 </h3>
                 <ul className="space-y-2">
-                  {analysis.signals.technical.map((signal, index) => (
+                  {analysis.judgment.reasons.map((signal, index) => (
                     <li key={index} className="flex items-start">
                       <span className="inline-block w-2 h-2 bg-blue-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
                       <span className="text-sm text-gray-700">{signal}</span>
@@ -156,10 +156,10 @@ export default function Home() {
               {/* ファンダメンタルシグナル */}
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  ファンダメンタルシグナル (スコア: {analysis.fundamentalScore}/100)
+                  ファンダメンタルシグナル (スコア: {Math.round(analysis.fundamental.score)}/100)
                 </h3>
                 <ul className="space-y-2">
-                  {analysis.signals.fundamental.map((signal, index) => (
+                  {analysis.judgment.risks.map((signal, index) => (
                     <li key={index} className="flex items-start">
                       <span className="inline-block w-2 h-2 bg-green-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
                       <span className="text-sm text-gray-700">{signal}</span>

@@ -55,11 +55,11 @@ export default function StockAnalysis({ analysis }: StockAnalysisProps) {
     <div className="space-y-6">
       {/* 総合判定 */}
       <div className="text-center">
-        <div className={`inline-flex items-center px-6 py-3 rounded-full text-lg font-bold ${getRecommendationColor(analysis.recommendation)}`}>
-          {getRecommendationText(analysis.recommendation)}
+        <div className={`inline-flex items-center px-6 py-3 rounded-full text-lg font-bold bg-blue-100 text-blue-800`}>
+          {analysis.judgment.signal}
         </div>
         <div className="mt-2 text-2xl font-bold text-gray-900">
-          総合スコア: <span className={getScoreColor(analysis.totalScore)}>{analysis.totalScore}/100</span>
+          総合スコア: <span className={getScoreColor(analysis.judgment.score)}>{Math.round(analysis.judgment.score)}/100</span>
         </div>
       </div>
 
@@ -69,14 +69,14 @@ export default function StockAnalysis({ analysis }: StockAnalysisProps) {
         <div>
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-medium text-gray-700">テクニカル分析</span>
-            <span className={`text-sm font-bold ${getScoreColor(analysis.technicalScore)}`}>
-              {analysis.technicalScore}/100
+            <span className={`text-sm font-bold ${getScoreColor(analysis.technical.score)}`}>
+              {Math.round(analysis.technical.score)}/100
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
             <div
-              className={`h-3 rounded-full ${getScoreBarColor(analysis.technicalScore)}`}
-              style={{ width: `${analysis.technicalScore}%` }}
+              className={`h-3 rounded-full ${getScoreBarColor(analysis.technical.score)}`}
+              style={{ width: `${analysis.technical.score}%` }}
             ></div>
           </div>
         </div>
@@ -85,14 +85,14 @@ export default function StockAnalysis({ analysis }: StockAnalysisProps) {
         <div>
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-medium text-gray-700">ファンダメンタル分析</span>
-            <span className={`text-sm font-bold ${getScoreColor(analysis.fundamentalScore)}`}>
-              {analysis.fundamentalScore}/100
+            <span className={`text-sm font-bold ${getScoreColor(analysis.fundamental.score)}`}>
+              {Math.round(analysis.fundamental.score)}/100
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
             <div
-              className={`h-3 rounded-full ${getScoreBarColor(analysis.fundamentalScore)}`}
-              style={{ width: `${analysis.fundamentalScore}%` }}
+              className={`h-3 rounded-full ${getScoreBarColor(analysis.fundamental.score)}`}
+              style={{ width: `${analysis.fundamental.score}%` }}
             ></div>
           </div>
         </div>
