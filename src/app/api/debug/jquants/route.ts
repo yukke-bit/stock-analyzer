@@ -40,6 +40,59 @@ export async function GET(request: NextRequest) {
       console.log('Search results count:', searchResults.length);
       console.log('First result:', searchResults[0]);
       
+      // 個別API呼び出しテスト
+      console.log('Testing individual API calls...');
+      const apiTests = {
+        prices: null as any,
+        stockInfo: null as any,
+        fundamentals: null as any
+      };
+      
+      try {
+        console.log('Testing getStockPrices...');
+        apiTests.prices = await jquantsAPI.getStockPrices('7203');
+        console.log('Stock prices successful, count:', apiTests.prices?.length || 0);
+      } catch (priceError) {
+        console.error('Stock prices failed:', priceError);
+        apiTests.prices = { error: priceError instanceof Error ? priceError.message : 'Unknown error' };
+      }
+      
+      try {
+        console.log('Testing getStockInfo...');
+        apiTests.stockInfo = await jquantsAPI.getStockInfo('7203');
+        console.log('Stock info successful, name:', apiTests.stockInfo?.name);
+      } catch (infoError) {
+        console.error('Stock info failed:', infoError);
+        apiTests.stockInfo = { error: infoError instanceof Error ? infoError.message : 'Unknown error' };
+      }
+      
+      try {
+        console.log('Testing getFundamentals...');
+        apiTests.fundamentals = await jquantsAPI.getFundamentals('7203');
+        console.log('Fundamentals successful, PER:', apiTests.fundamentals?.per);
+      } catch (fundError) {
+        console.error('Fundamentals failed:', fundError);
+        apiTests.fundamentals = { error: fundError instanceof Error ? fundError.message : 'Unknown error' };
+      }
+      
+      // 株価データ取得テスト結果を含める
+      let stockDataTest = null;
+      try {
+        const stockData = await jquantsAPI.getStockData('7203');
+        stockDataTest = {
+          success: true,
+          name: stockData.name,
+          pricesCount: stockData.prices?.length || 0,
+          firstPrice: stockData.prices?.[0] || null,
+          fundamentals: stockData.fundamentals
+        };
+      } catch (stockError) {
+        stockDataTest = {
+          success: false,
+          error: stockError instanceof Error ? stockError.message : 'Unknown error'
+        };
+      }
+
       return NextResponse.json({
         success: true,
         auth: {
@@ -52,6 +105,12 @@ export async function GET(request: NextRequest) {
           firstResult: searchResults[0] || null,
           allResults: searchResults
         },
+        apiTests: {
+          prices: apiTests.prices ? (apiTests.prices.error ? { error: apiTests.prices.error } : { success: true, count: apiTests.prices.length }) : null,
+          stockInfo: apiTests.stockInfo ? (apiTests.stockInfo.error ? { error: apiTests.stockInfo.error } : { success: true, name: apiTests.stockInfo.name }) : null,
+          fundamentals: apiTests.fundamentals ? (apiTests.fundamentals.error ? { error: apiTests.fundamentals.error } : { success: true, per: apiTests.fundamentals.per }) : null
+        },
+        stockData: stockDataTest,
         timestamp: new Date().toISOString()
       });
       

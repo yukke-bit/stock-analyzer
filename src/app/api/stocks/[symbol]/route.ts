@@ -23,15 +23,16 @@ export async function GET(
     let stockData = await cache.getStockData(symbol);
     
     if (!stockData) {
-      console.log(`Fetching fresh data for ${symbol} from J-Quants API`);
+      console.log(`J-Quants APIからデータを取得中: ${symbol}`);
       stockData = await jquantsAPI.getStockData(symbol);
       
       if (stockData) {
         // キャッシュに保存
         await cache.saveStockData(symbol, stockData);
+        console.log(`データをキャッシュに保存: ${symbol}`);
       }
     } else {
-      console.log(`Using cached data for ${symbol}`);
+      console.log(`キャッシュからデータを取得: ${symbol}`);
     }
 
     if (!stockData) {

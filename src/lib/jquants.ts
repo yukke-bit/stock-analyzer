@@ -7,17 +7,15 @@ interface JQuantsConfig {
 }
 
 interface JQuantsRefreshTokenResponse {
-  refresh_token: string;
+  refreshToken: string;
 }
 
 interface JQuantsAccessTokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
+  idToken: string;
 }
 
 interface JQuantsPriceResponse {
-  prices: {
+  daily_quotes: {
     Date: string;
     Code: string;
     Open: number;
@@ -33,6 +31,7 @@ interface JQuantsPriceResponse {
     AdjustmentClose: number;
     AdjustmentVolume: number;
   }[];
+  pagination_key?: string;
 }
 
 interface JQuantsListedInfoResponse {
@@ -100,7 +99,7 @@ export class JQuantsAPI {
       }
 
       const data: JQuantsRefreshTokenResponse = await response.json();
-      this.refreshToken = data.refresh_token;
+      this.refreshToken = data.refreshToken;
       
       console.log('J-Quants refresh token obtained successfully');
       return this.refreshToken;
@@ -124,14 +123,11 @@ export class JQuantsAPI {
     }
 
     try {
-      const response = await fetch(`${this.config.baseUrl}/token/auth_refresh`, {
+      const response = await fetch(`${this.config.baseUrl}/token/auth_refresh?refreshtoken=${this.refreshToken}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          refreshtoken: this.refreshToken
-        })
+        }
       });
 
       if (!response.ok) {
@@ -147,8 +143,8 @@ export class JQuantsAPI {
       }
 
       const data: JQuantsAccessTokenResponse = await response.json();
-      this.accessToken = data.access_token;
-      this.tokenExpiry = new Date(Date.now() + (data.expires_in - 60) * 1000); // 60秒の余裕を持たせる
+      this.accessToken = data.idToken;
+      this.tokenExpiry = new Date(Date.now() + 23 * 60 * 60 * 1000); // 23時間（24時間 - 1時間の余裕）
 
       console.log('J-Quants access token obtained successfully');
       return this.accessToken;
@@ -172,10 +168,21 @@ export class JQuantsAPI {
     try {
       const token = await this.authenticate();
       
-      // 日付範囲の計算
-      const endDate = new Date();
-      const startDate = new Date();
+      // 日付範囲の計算（J-Quants契約期間を考慮）
+      // 契約期間: 2023-03-21 ~ 2025-03-21
+      const contractEndDate = new Date('2025-03-21');
+      const today = new Date();
+      
+      // 契約期間内の最新日付を使用
+      const endDate = today <= contractEndDate ? today : contractEndDate;
+      const startDate = new Date(endDate);
       startDate.setDate(endDate.getDate() - days);
+      
+      // 契約開始日より前の場合は調整
+      const contractStartDate = new Date('2023-03-21');
+      if (startDate < contractStartDate) {
+        startDate.setTime(contractStartDate.getTime());
+      }
 
       const fromDate = startDate.toISOString().split('T')[0];
       const toDate = endDate.toISOString().split('T')[0];
@@ -190,12 +197,22 @@ export class JQuantsAPI {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch stock prices: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`Stock prices API error: ${response.status}`, errorText);
+        console.error(`Requested URL: ${url}`);
+        throw new Error(`Failed to fetch stock prices: ${response.status} - ${errorText}`);
       }
 
       const data: JQuantsPriceResponse = await response.json();
+      
+      console.log('Stock prices API response:', JSON.stringify(data, null, 2));
+      
+      if (!data.daily_quotes || !Array.isArray(data.daily_quotes)) {
+        console.error('Invalid daily_quotes data structure:', data);
+        throw new Error('Invalid API response: daily_quotes array not found');
+      }
 
-      return data.prices.map(price => ({
+      return data.daily_quotes.map(price => ({
         date: price.Date,
         open: price.AdjustmentOpen || price.Open,
         high: price.AdjustmentHigh || price.High,
